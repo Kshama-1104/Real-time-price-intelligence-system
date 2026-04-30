@@ -1,9 +1,21 @@
 require('dotenv').config();
 const { httpServer } = require('./app');
 const logger = require('./core/logger');
+const env = require('./config/env');
+const db = require('./database/pool');
+const cache = require('./cache/redis');
 
-const PORT = process.env.PORT || 3000;
-const NODE_ENV = process.env.NODE_ENV || 'development';
+const PORT = env.port;
+const NODE_ENV = env.nodeEnv;
+
+const shutdown = (signal) => {
+  logger.info(`${signal} signal received: closing HTTP server`);
+  httpServer.close(async () => {
+    await Promise.allSettled([db.close(), cache.close()]);
+    logger.info('HTTP server closed');
+    process.exit(0);
+  });
+};
 
 // Start server
 httpServer.listen(PORT, () => {
@@ -12,21 +24,8 @@ httpServer.listen(PORT, () => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM signal received: closing HTTP server');
-  httpServer.close(() => {
-    logger.info('HTTP server closed');
-    process.exit(0);
-  });
-});
-
-process.on('SIGINT', () => {
-  logger.info('SIGINT signal received: closing HTTP server');
-  httpServer.close(() => {
-    logger.info('HTTP server closed');
-    process.exit(0);
-  });
-});
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err) => {
@@ -43,5 +42,4 @@ process.on('uncaughtException', (err) => {
 });
 
 module.exports = httpServer;
-
 

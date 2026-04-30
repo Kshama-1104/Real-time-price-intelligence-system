@@ -2,28 +2,29 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:15-alpine
-    container_name: event-stream-db
+    image: postgres:16-alpine
+    container_name: price-intel-postgres
     environment:
-      POSTGRES_DB: ${DB_NAME:-event_stream}
+      POSTGRES_DB: ${DB_NAME:-price_intelligence}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./src/database/migrations:/docker-entrypoint-initdb.d
+      - ./src/database/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-price_intelligence}"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - event-stream-network
+      - price-intel
 
   redis:
     image: redis:7-alpine
-    container_name: event-stream-redis
+    container_name: price-intel-redis
+    command: ["redis-server", "--appendonly", "yes"]
     ports:
       - "${REDIS_PORT:-6379}:6379"
     volumes:
@@ -34,44 +35,84 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - event-stream-network
+      - price-intel
 
-  app:
+  api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: event-stream-app
-    ports:
-      - "${PORT:-3000}:3000"
+    container_name: price-intel-api
     environment:
-      NODE_ENV: ${NODE_ENV:-development}
+      NODE_ENV: production
+      PORT: 3000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost,http://localhost:5173}
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-event_stream}
+      DB_NAME: ${DB_NAME:-price_intelligence}
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
-      - ./src:/app/src
-      - ./config:/app/config
-      - ./logs:/app/logs
-      - ./events:/app/events
+      - api_logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - event-stream-network
     restart: unless-stopped
+    networks:
+      - price-intel
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: price-intel-nginx
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - price-intel
+
+  prometheus:
+    image: prom/prometheus:v2.48.1
+    container_name: price-intel-prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./deploy/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - api
+    networks:
+      - price-intel
+
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: price-intel-grafana
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - price-intel
 
 volumes:
   postgres_data:
   redis_data:
+  api_logs:
+  prometheus_data:
+  grafana_data:
 
 networks:
-  event-stream-network:
+  price-intel:
     driver: bridge
-
-

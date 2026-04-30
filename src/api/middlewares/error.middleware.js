@@ -1,7 +1,7 @@
 const logger = require('../../core/logger');
 const responseUtil = require('../../utils/response.util');
 
-const errorMiddleware = (err, req, res, next) => {
+const errorMiddleware = (err, req, res, _next) => {
   logger.error('Error:', {
     message: err.message,
     stack: err.stack,
@@ -20,5 +20,4 @@ const errorMiddleware = (err, req, res, next) => {
 };
 
 module.exports = errorMiddleware;
-
 

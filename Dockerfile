@@ -1,25 +1,29 @@
-FROM node:18-alpine
+FROM node:20-alpine AS client-builder
+
+WORKDIR /app/client
+COPY client/package*.json ./
+RUN npm install
+COPY client/ ./
+RUN npm run build
+
+FROM node:20-alpine AS server
 
 WORKDIR /app
+ENV NODE_ENV=production
 
-# Install dependencies
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
-# Copy application code
-COPY . .
+COPY src ./src
+COPY config ./config
+COPY public ./public
+COPY --from=client-builder /app/client/dist ./client/dist
 
-# Create necessary directories
 RUN mkdir -p logs events partitions checkpoints offsets
 
-# Expose port
 EXPOSE 3000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+  CMD node -e "require('http').get('http://localhost:3000/health', (response) => { process.exit(response.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));"
 
-# Start application
 CMD ["node", "src/server.js"]
-
-

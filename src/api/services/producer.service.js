@@ -2,7 +2,7 @@ const logger = require('../../core/logger');
 const brokerManager = require('../../core/broker/broker-manager');
 const partitionAllocator = require('../../core/broker/partition-allocator');
 const schemaService = require('./schema.service');
-const uuid = require('uuid');
+const { randomUUID } = require('crypto');
 
 class ProducerService {
   async produce(topicName, eventData) {
@@ -15,7 +15,7 @@ class ProducerService {
 
       // Create event
       const event = {
-        id: uuid.v4(),
+        id: randomUUID(),
         topic: topicName,
         partition,
         timestamp: new Date().toISOString(),
@@ -67,5 +67,4 @@ class ProducerService {
 }
 
 module.exports = new ProducerService();
-
 
