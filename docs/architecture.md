@@ -1,92 +1,58 @@
-# Architecture Documentation
+# Architecture
 
-## System Architecture
+## Runtime View
 
-Event Stream follows a distributed, scalable architecture designed for high-throughput event processing.
+```text
+React Dashboard
+  |
+  | REST + Socket.IO
+  v
+Nginx reverse proxy
+  |
+  v
+Node.js Express API
+  |        |
+  |        +-- Redis cache for dashboard and product reads
+  |
+  +-- PostgreSQL for product, competitor price, and alert data
 
-## High-Level Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Event Producers                         │
-│              (Applications, Services, IoT Devices)            │
-└──────────────────────┬──────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      API Gateway Layer                       │
-│         (Authentication, Rate Limiting, Routing)             │
-└──────────────────────┬──────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Application Layer                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │   Routes      │  │ Controllers  │  │  Services    │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-└──────────────────────┬──────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Core Engine Layer                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │   Broker      │  │   Stream      │  │  Schema      │     │
-│  │  Manager      │  │   Engine      │  │  Registry    │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-└──────────────────────┬──────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Data Layer                                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │  PostgreSQL  │  │    Redis      │  │   File Store  │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-└─────────────────────────────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Event Consumers                            │
-│              (Applications, Analytics, Storage)               │
-└─────────────────────────────────────────────────────────────┘
+Prometheus scrapes /metrics
+Grafana visualizes Prometheus data
+Winston writes structured application logs
 ```
 
-## Component Overview
+## Backend Modules
 
-### 1. API Layer
-- **Routes**: Define API endpoints
-- **Controllers**: Handle HTTP requests/responses
-- **Services**: Business logic implementation
-- **Middlewares**: Cross-cutting concerns
-- **Validators**: Input validation
+| Module | Responsibility |
+| --- | --- |
+| `src/app.js` | Express app, middleware, routes, static React serving, health and metrics |
+| `src/api/routes/product.routes.js` | Price intelligence REST routes |
+| `src/api/services/product.service.js` | Pricing calculations, product reads/writes, cache strategy, DB fallback |
+| `src/database/pool.js` | PostgreSQL connection pool and status checks |
+| `src/cache/redis.js` | Redis client, JSON cache helpers, graceful degradation |
+| `src/core/logger` | Winston structured logging |
 
-### 2. Core Engine
-- **Broker Manager**: Topic and partition management
-- **Stream Engine**: Real-time event processing
-- **Schema Registry**: Event schema management
+## Frontend Modules
 
-### 3. Event Flow
+| Module | Responsibility |
+| --- | --- |
+| `client/src/App.jsx` | Dashboard composition, filters, charts, product table, alert queue |
+| `client/src/services/api.js` | REST client and Socket.IO base URL |
+| `client/src/data/fallback.js` | Demo UI data when the API is not reachable |
+| `client/src/index.css` | Tailwind entry and global UI behavior |
 
-1. **Produce**: Producer sends event to topic
-2. **Validate**: Event validated against schema
-3. **Partition**: Event routed to partition
-4. **Store**: Event stored in partition
-5. **Process**: Stream engine processes event
-6. **Consume**: Consumer reads event
-7. **Commit**: Offset committed
+## Data Flow
 
-## Scalability Considerations
+1. The dashboard requests `/api/v1/price-intelligence/summary`.
+2. The API attempts to serve the summary from Redis.
+3. On cache miss, PostgreSQL product, price observation, and alert records are loaded.
+4. Product margin, lowest competitor, spread, recommended price, and category performance are computed.
+5. The response is cached briefly and returned to the UI.
+6. New price observations invalidate the cache and emit `price:updated` through Socket.IO.
 
-- **Horizontal Scaling**: Multiple broker instances
-- **Partitioning**: Events distributed across partitions
-- **Caching**: Redis for metadata and offsets
-- **Database Optimization**: Indexing and query optimization
-- **Load Balancing**: Multiple API instances
+## Failure Behavior
 
-## Performance Optimization
-
-- **Batch Processing**: Batch event operations
-- **Connection Pooling**: Efficient database connections
-- **Event Compression**: Compress large events
-- **Async Processing**: Non-blocking operations
-
-
+- If PostgreSQL is unavailable, the API serves seeded in-memory demo data.
+- If Redis is unavailable, requests continue without caching.
+- `/api/v1/price-intelligence/system` exposes whether the app is connected or in fallback mode.
+- `/metrics` stays available for process monitoring even when data infrastructure is down.

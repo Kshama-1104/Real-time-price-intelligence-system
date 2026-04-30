@@ -1,12 +1,16 @@
 {
-  "name": "event-stream",
-  "version": "1.0.0",
-  "description": "High-throughput, low-latency event streaming and processing platform",
+  "name": "real-time-price-intelligence-system",
+  "version": "2.0.0",
+  "description": "Full-stack real-time price intelligence platform with React, Node.js, PostgreSQL, Redis, Docker, Nginx, and AWS-ready deployment assets",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "jest",
+    "client:dev": "npm --prefix client run dev",
+    "client:build": "npm --prefix client run build",
+    "client:preview": "npm --prefix client run preview",
+    "build": "npm --prefix client run build",
+    "test": "jest --passWithNoTests --runInBand",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:unit": "jest src/tests/unit",
@@ -16,19 +20,22 @@
     "db:seed": "node src/database/seeders/run.js",
     "lint": "eslint src/**/*.js",
     "lint:fix": "eslint src/**/*.js --fix",
-    "format": "prettier --write \"src/**/*.js\"",
-    "build": "echo 'Build complete'",
+    "format": "prettier --write \"src/**/*.js\" \"client/src/**/*.{js,jsx}\"",
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down"
   },
   "keywords": [
-    "event-streaming",
-    "stream-processing",
-    "kafka",
-    "events",
-    "real-time",
-    "streaming"
+    "price-intelligence",
+    "full-stack",
+    "react",
+    "tailwind",
+    "nodejs",
+    "postgresql",
+    "redis",
+    "aws",
+    "docker",
+    "nginx"
   ],
   "author": "Kshama Mishra",
   "license": "UNLICENSED",
@@ -38,26 +45,15 @@
     "helmet": "^7.1.0",
     "dotenv": "^16.3.1",
     "pg": "^8.11.3",
-    "sequelize": "^6.35.2",
-    "redis": "^4.6.11",
     "jsonwebtoken": "^9.0.2",
-    "bcryptjs": "^2.4.3",
     "joi": "^17.11.0",
     "winston": "^3.11.0",
     "winston-daily-rotate-file": "^4.7.1",
     "socket.io": "^4.6.1",
-    "axios": "^1.6.2",
-    "node-cron": "^3.0.3",
-    "uuid": "^9.0.1",
-    "crypto": "^1.0.1",
-    "moment": "^2.30.1",
-    "lodash": "^4.17.21",
     "express-rate-limit": "^7.1.5",
-    "express-validator": "^7.0.1",
     "compression": "^1.7.4",
     "morgan": "^1.10.0",
-    "ioredis": "^5.3.2",
-    "avro-js": "^1.11.2"
+    "ioredis": "^5.3.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.2",
@@ -69,7 +65,11 @@
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/src/**/*.test.js"
+    ]
   }
 }
-
-

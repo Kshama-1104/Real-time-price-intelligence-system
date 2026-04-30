@@ -12,7 +12,7 @@ const logger = winston.createLogger({
     winston.format.splat(),
     winston.format.json()
   ),
-  defaultMeta: { service: 'event-stream' },
+  defaultMeta: { service: 'price-intelligence' },
   transports: [
     new DailyRotateFile({
       filename: path.join(logDir, 'error-%DATE%.log'),
@@ -40,5 +40,4 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 module.exports = logger;
-
 

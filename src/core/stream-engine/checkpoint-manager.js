@@ -26,7 +26,7 @@ class CheckpointManager {
   async get(consumerGroup, topic) {
     try {
       const checkpoints = [];
-      for (const [key, checkpoint] of this.checkpoints) {
+      for (const checkpoint of this.checkpoints.values()) {
         if (checkpoint.consumerGroup === consumerGroup && checkpoint.topic === topic) {
           checkpoints.push(checkpoint);
         }
@@ -46,5 +46,4 @@ class CheckpointManager {
 }
 
 module.exports = new CheckpointManager();
-
 

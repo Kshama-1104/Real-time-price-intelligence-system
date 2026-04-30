@@ -62,13 +62,15 @@ class StreamProcessorService {
     switch (config.operation) {
       case 'count':
         return (state?.count || 0) + events.length;
-      case 'sum':
+      case 'sum': {
         const sum = events.reduce((acc, e) => acc + (e.value[config.field] || 0), 0);
         return (state?.sum || 0) + sum;
-      case 'average':
+      }
+      case 'average': {
         const total = (state?.total || 0) + events.length;
         const sum2 = (state?.sum || 0) + events.reduce((acc, e) => acc + (e.value[config.field] || 0), 0);
         return sum2 / total;
+      }
       default:
         return state;
     }
@@ -86,5 +88,4 @@ class StreamProcessorService {
 }
 
 module.exports = new StreamProcessorService();
-
 

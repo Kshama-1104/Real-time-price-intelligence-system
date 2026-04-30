@@ -1,140 +1,111 @@
 # API Documentation
 
-## Base URL
-```
-http://localhost:3000/api/v1
+Base URL:
+
+```text
+/api/v1/price-intelligence
 ```
 
-## Authentication
+All responses use the shared envelope:
 
-All endpoints require authentication via JWT token.
-
-Include the token in the Authorization header:
-```
-Authorization: Bearer <your-token>
-```
-
-## Endpoints
-
-### Topics
-
-#### Create Topic
-```
-POST /topics
-Body: {
-  "name": "string",
-  "partitions": "number",
-  "replicationFactor": "number",
-  "retentionMs": "number"
-}
-```
-
-#### Get Topic
-```
-GET /topics/:name
-```
-
-#### List Topics
-```
-GET /topics
-```
-
-#### Delete Topic
-```
-DELETE /topics/:name
-```
-
-### Events
-
-#### Produce Event
-```
-POST /topics/:topicName/events
-Body: {
-  "key": "string",
-  "value": {},
-  "headers": {}
-}
-```
-
-#### Produce Batch
-```
-POST /topics/:topicName/events/batch
-Body: {
-  "events": [...]
-}
-```
-
-#### Consume Events
-```
-GET /topics/:topicName/events
-Query: ?consumerGroup=...&partition=...&offset=...
-```
-
-### Consumer Groups
-
-#### Create Consumer Group
-```
-POST /consumer-groups
-Body: {
-  "name": "string",
-  "topics": ["string"]
-}
-```
-
-#### Get Consumer Group
-```
-GET /consumer-groups/:name
-```
-
-#### Commit Offset
-```
-POST /consumer-groups/:name/offsets
-Body: {
-  "topic": "string",
-  "partition": "number",
-  "offset": "number"
-}
-```
-
-### Metrics
-
-#### Get Topic Metrics
-```
-GET /metrics/topics/:topicName
-```
-
-#### Get Consumer Metrics
-```
-GET /metrics/consumers/:consumerGroup
-```
-
-#### Get System Metrics
-```
-GET /metrics/system
-```
-
-## Error Responses
-
-All errors follow this format:
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Human readable message",
-    "details": { ... }
-  }
+  "success": true,
+  "message": "Success",
+  "data": {},
+  "timestamp": "2026-04-30T00:00:00.000Z"
 }
 ```
 
-## Status Codes
+## Dashboard Summary
 
-- `200` - Success
-- `201` - Created
-- `400` - Bad Request
-- `401` - Unauthorized
-- `403` - Forbidden
-- `404` - Not Found
-- `500` - Internal Server Error
+```http
+GET /summary
+```
 
+Returns KPI cards, trend data, category spread data, pricing recommendations, and active alerts.
 
+## Products
+
+```http
+GET /products?search=buds&category=Audio&status=watch&page=1&limit=50
+```
+
+Query parameters:
+
+| Name | Type | Notes |
+| --- | --- | --- |
+| `search` | string | Matches product name, SKU, or brand |
+| `category` | string | Exact category filter |
+| `status` | string | `healthy`, `watch`, `action`, or `opportunity` |
+| `page` | number | Defaults to `1` |
+| `limit` | number | Defaults to `50`, max `100` |
+
+```http
+GET /products/:id
+```
+
+`:id` may be a product id or SKU.
+
+```http
+POST /products
+Content-Type: application/json
+```
+
+```json
+{
+  "sku": "CAM-9001",
+  "name": "ViewMax 4K Action Camera",
+  "category": "Cameras",
+  "brand": "ViewMax",
+  "channel": "Marketplace",
+  "ourPrice": 149.99,
+  "cost": 82.25,
+  "targetMargin": 35,
+  "stock": 220,
+  "status": "watch"
+}
+```
+
+## Price Observations
+
+```http
+POST /products/:id/prices
+Content-Type: application/json
+```
+
+```json
+{
+  "retailer": "Amazon",
+  "price": 143.49,
+  "availability": "In stock",
+  "rating": 4.4
+}
+```
+
+Successful writes emit a Socket.IO `price:updated` event.
+
+## Alerts
+
+```http
+GET /alerts
+```
+
+Returns the current pricing alert queue.
+
+## System Status
+
+```http
+GET /system
+```
+
+Returns API, PostgreSQL, Redis, uptime, and fallback status.
+
+## Operations
+
+```http
+GET /health
+GET /metrics
+```
+
+`/metrics` exposes Prometheus-compatible process metrics.
