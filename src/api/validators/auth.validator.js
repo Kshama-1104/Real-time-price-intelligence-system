@@ -9,12 +9,12 @@ const signupSchema = Joi.object({
   name: Joi.string().trim().min(2).max(80).required(),
   email: Joi.string().email().required(),
   password: Joi.string().min(6).max(80).required(),
-  company: Joi.string().trim().min(2).max(120).default('Self Serve')
+  company: Joi.string().trim().max(120).empty('').default('')
 });
 
 const profileSchema = Joi.object({
   name: Joi.string().trim().min(2).max(80),
-  company: Joi.string().trim().min(2).max(120),
+  company: Joi.string().trim().max(120).allow(''),
   preferences: Joi.object({
     weeklyDigest: Joi.boolean(),
     criticalAlerts: Joi.boolean(),

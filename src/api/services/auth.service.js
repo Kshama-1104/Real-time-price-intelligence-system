@@ -203,7 +203,7 @@ class AuthService {
       email,
       password: hashPassword(payload.password),
       role: 'client',
-      company: payload.company || 'Self Serve',
+      company: payload.company || `${payload.name}'s Store`,
       organizationId: `org-${crypto.randomUUID()}`,
       preferences: { ...DEFAULT_PREFERENCES },
       status: 'active',

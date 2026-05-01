@@ -1,3 +1,6 @@
+process.env.NODE_ENV = 'test';
+process.env.ALLOW_DEMO_DATA = 'true';
+
 jest.mock('../../database/pool', () => ({
   ping: jest.fn().mockResolvedValue(false),
   status: jest.fn().mockReturnValue({ connected: false }),

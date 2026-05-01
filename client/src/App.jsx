@@ -193,11 +193,16 @@ function LoginScreen({ onLogin }) {
                     <input className="mt-1 h-11 w-full rounded-lg border border-stone-200 px-3 outline-none focus:border-moss" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
                   </label>
                   <label className="block text-sm font-medium text-stone-600">
-                    Company
-                    <input className="mt-1 h-11 w-full rounded-lg border border-stone-200 px-3 outline-none focus:border-moss" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
+                    Store / business name
+                    <input
+                      className="mt-1 h-11 w-full rounded-lg border border-stone-200 px-3 outline-none focus:border-moss"
+                      placeholder="Example: Kshama Store"
+                      value={form.company}
+                      onChange={(e) => setForm({ ...form, company: e.target.value })}
+                    />
                   </label>
                   <div className="rounded-lg border border-mint bg-mint/40 p-3 text-sm text-moss sm:col-span-2">
-                    Public signup creates a secure Client workspace. Admin and Analyst accounts are invited by an existing admin.
+                    This can be your shop, brand, seller account, or business name. You can leave it empty and change it later.
                   </div>
                 </div>
               )}
@@ -1349,7 +1354,7 @@ function SettingsView({ user, updateProfile }) {
             <input className="mt-1 h-11 w-full rounded-lg border border-stone-200 px-3 outline-none focus:border-moss" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </label>
           <label className="text-sm font-medium text-stone-600">
-            Company
+            Store / business name
             <input className="mt-1 h-11 w-full rounded-lg border border-stone-200 px-3 outline-none focus:border-moss" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
           </label>
         </div>
