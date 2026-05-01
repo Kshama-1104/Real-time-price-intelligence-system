@@ -21,6 +21,7 @@ router.get('/products/:id', productController.get);
 router.put('/products/:id', allowRoles('admin', 'analyst', 'client'), validate(productUpdateSchema), productController.update);
 router.delete('/products/:id', allowRoles('admin', 'analyst', 'client'), productController.delete);
 router.post('/products/:id/prices', allowRoles('admin', 'analyst', 'client'), validate(observationSchema), productController.recordPrice);
+router.post('/products/:id/scan', allowRoles('admin', 'analyst', 'client'), productController.scanMarket);
 router.get('/alerts', productController.alerts);
 router.patch('/alerts/:id', allowRoles('admin', 'analyst', 'client'), validate(alertStatusSchema), productController.updateAlert);
 router.get('/reports/executive', productController.report);

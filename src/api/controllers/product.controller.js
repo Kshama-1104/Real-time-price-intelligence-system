@@ -82,6 +82,21 @@ class ProductController {
     }
   }
 
+  async scanMarket(req, res, next) {
+    try {
+      const result = await productService.scanMarket(req.user, req.params.id);
+      const io = req.app.get('io');
+
+      if (io) {
+        io.emit('price:updated', { id: result.product.id });
+      }
+
+      res.json(responseUtil.success(result, 'Market scan completed'));
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async alerts(req, res, next) {
     try {
       const alerts = await productService.listAlerts(req.user);

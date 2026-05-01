@@ -58,6 +58,7 @@ export const api = {
   updateProduct: (id, payload) => request(`/products/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteProduct: (id) => request(`/products/${id}`, { method: 'DELETE' }),
   addPrice: (id, payload) => request(`/products/${id}/prices`, { method: 'POST', body: JSON.stringify(payload) }),
+  scanMarket: (id) => request(`/products/${id}/scan`, { method: 'POST' }),
   getAlerts: () => request('/alerts'),
   updateAlert: (id, payload) => request(`/alerts/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   getReport: () => request('/reports/executive'),

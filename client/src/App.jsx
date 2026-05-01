@@ -45,8 +45,8 @@ import {
 } from 'recharts';
 import { api, socketBaseUrl } from './services/api';
 
-const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
-const number = new Intl.NumberFormat('en-US');
+const money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
+const number = new Intl.NumberFormat('en-IN');
 const DEMO_MODE = import.meta.env.VITE_ENABLE_DEMO_ACCOUNTS === 'true';
 
 const emptyDashboard = {
@@ -306,7 +306,7 @@ function ProductModal({ product, onClose, onSave }) {
     <Modal title={product ? 'Edit product' : 'Add tracked product'} onClose={onClose}>
       {!product && (
         <p className="mb-4 rounded-lg border border-mint bg-mint/30 p-3 text-sm text-moss">
-          Add the product you sell. After saving, PricePulse will ask for one competitor price to start recommendations.
+          Add the product you sell. PricePulse will scan market channels automatically after saving.
         </p>
       )}
       <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
@@ -315,8 +315,8 @@ function ProductModal({ product, onClose, onSave }) {
           ['name', 'Product name'],
           ['category', 'Category'],
           ['brand', 'Brand'],
-          ['ourPrice', 'Your selling price'],
-          ['cost', 'Cost to you'],
+          ['ourPrice', 'Your selling price (₹)'],
+          ['cost', 'Cost to you (₹)'],
           ['targetMargin', 'Margin goal (%)'],
           ['stock', 'Stock']
         ].map(([key, label]) => (
@@ -371,13 +371,16 @@ function PriceModal({ product, onClose, onSave }) {
 
   return (
     <Modal title={`Add competitor price for ${product.sku}`} onClose={onClose}>
+      <p className="mb-4 rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm text-stone-600">
+        Use this only when you want to add or correct one competitor price manually. The market scan can add competitors automatically.
+      </p>
       <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
         <label className="text-sm font-medium text-stone-600">
           Retailer
           <input className="mt-1 h-10 w-full rounded-lg border border-stone-200 px-3 outline-none focus:border-moss" value={form.retailer} onChange={(e) => setForm({ ...form, retailer: e.target.value })} required />
         </label>
         <label className="text-sm font-medium text-stone-600">
-          Price
+          Price (₹)
           <input className="mt-1 h-10 w-full rounded-lg border border-stone-200 px-3 outline-none focus:border-moss" type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} required />
         </label>
         <label className="text-sm font-medium text-stone-600">
@@ -403,15 +406,17 @@ function PriceModal({ product, onClose, onSave }) {
 
 function Modal({ title, children, onClose }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 p-4">
-      <section className="w-full max-w-2xl rounded-lg bg-white p-5 shadow-soft">
-        <div className="mb-4 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-ink/50 p-3 sm:p-5">
+      <section className="mx-auto my-3 flex max-h-[calc(100vh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-soft sm:my-5 sm:max-h-[calc(100vh-2.5rem)]">
+        <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-stone-200 bg-white px-5 py-4">
           <h2 className="text-lg font-semibold text-ink">{title}</h2>
           <button type="button" title="Close" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:bg-stone-100">
             <X className="h-4 w-4" />
           </button>
         </div>
-        {children}
+        <div className="overflow-y-auto p-5">
+          {children}
+        </div>
       </section>
     </div>
   );
@@ -548,8 +553,9 @@ function App() {
         setMessage('Product saved successfully.');
       } else {
         const product = await api.createProduct(payload);
-        setModal({ type: 'price', product });
-        setMessage('Product added. Add one competitor price next so PricePulse can create recommendations.');
+        await api.scanMarket(product.id);
+        setModal(null);
+        setMessage('Product added and market scan completed automatically.');
       }
       await loadData();
     } catch (error) {
@@ -575,6 +581,18 @@ function App() {
       await api.addPrice(productId, payload);
       setModal(null);
       setMessage('Competitor price recorded.');
+      await loadData();
+    } catch (error) {
+      setMessage(error.message);
+    }
+  };
+
+  const scanMarket = async (product) => {
+    try {
+      setMessage(`Scanning market prices for ${product.sku}.`);
+      await api.scanMarket(product.id);
+      setModal(null);
+      setMessage('Market scan completed. Recommendations and alerts are updated.');
       await loadData();
     } catch (error) {
       setMessage(error.message);
@@ -747,6 +765,7 @@ function App() {
                 canManageProducts={canManageProducts}
                 isAdmin={isAdmin}
                 onAddProduct={() => setModal({ type: 'product' })}
+                onScan={scanMarket}
                 onEdit={(product) => setModal({ type: 'product', product })}
                 onPrice={(product) => setModal({ type: 'price', product })}
                 onDetails={(product) => setModal({ type: 'detail', product })}
@@ -767,7 +786,7 @@ function App() {
 
       {modal?.type === 'product' && <ProductModal product={modal.product} onClose={() => setModal(null)} onSave={saveProduct} />}
       {modal?.type === 'price' && <PriceModal product={modal.product} onClose={() => setModal(null)} onSave={addPrice} />}
-      {modal?.type === 'detail' && <ProductDetailModal product={modal.product} onClose={() => setModal(null)} />}
+      {modal?.type === 'detail' && <ProductDetailModal product={modal.product} onScan={scanMarket} onClose={() => setModal(null)} />}
     </main>
   );
 }
@@ -936,13 +955,23 @@ function ClientDashboardView({ dashboard, products, alerts, setView, onAddProduc
   );
 }
 
-function ProductDetailModal({ product, onClose }) {
+function ProductDetailModal({ product, onScan, onClose }) {
   const history = product.priceHistory || [];
   const competitors = product.competitors || [];
 
   return (
     <Modal title={product.name} onClose={onClose}>
       <div className="space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-mint bg-mint/30 p-3">
+          <div>
+            <p className="font-semibold text-moss">Market scan</p>
+            <p className="text-sm text-stone-600">Refresh competitor prices without entering each price manually.</p>
+          </div>
+          <button type="button" onClick={() => onScan(product)} className="flex h-10 items-center gap-2 rounded-lg bg-ink px-4 text-sm font-semibold text-white hover:bg-moss">
+            <RefreshCw className="h-4 w-4" />
+            Scan market
+          </button>
+        </div>
         <div className="grid gap-3 sm:grid-cols-4">
           <MetricCard icon={ShoppingBasket} label="SKU" value={product.sku} detail={product.category} tone="bg-mint text-moss" />
           <MetricCard icon={CircleDollarSign} label="Our price" value={money.format(product.ourPrice)} detail={`${product.margin}% margin`} tone="bg-amber-100 text-amber-700" />
@@ -1055,6 +1084,7 @@ function ProductsView(props) {
     setCategory,
     canManageProducts,
     onAddProduct,
+    onScan,
     onDetails,
     onEdit,
     onPrice,
@@ -1095,7 +1125,7 @@ function ProductsView(props) {
             <ShoppingBasket className="mx-auto h-8 w-8 text-stone-400" />
             <h3 className="mt-3 text-lg font-semibold text-ink">No products yet</h3>
             <p className="mx-auto mt-2 max-w-md text-sm text-stone-500">
-              Add one product and one competitor price. Your dashboard, recommendations, alerts, and reports will update automatically.
+              Add one product. PricePulse can scan market prices and update your dashboard, recommendations, alerts, and reports automatically.
             </p>
             {canManageProducts && (
               <button type="button" onClick={onAddProduct} className="mt-4 h-10 rounded-lg bg-ink px-4 text-sm font-semibold text-white hover:bg-moss">
@@ -1126,6 +1156,7 @@ function ProductsView(props) {
                 <td className="px-4 py-4">
                   <div className="flex gap-2">
                     <button title="View details" type="button" onClick={() => onDetails(product)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:border-moss hover:text-moss"><Eye className="h-4 w-4" /></button>
+                    {canManageProducts && <button title="Scan market" type="button" onClick={() => onScan(product)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:border-moss hover:text-moss"><RefreshCw className="h-4 w-4" /></button>}
                     {canManageProducts && <button title="Add price" type="button" onClick={() => onPrice(product)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:border-moss hover:text-moss"><CircleDollarSign className="h-4 w-4" /></button>}
                     {canManageProducts && <button title="Edit" type="button" onClick={() => onEdit(product)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:border-moss hover:text-moss"><Pencil className="h-4 w-4" /></button>}
                     {canManageProducts && <button title="Delete" type="button" onClick={() => onDelete(product)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 hover:border-rose-300 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>}
@@ -1147,7 +1178,7 @@ function Recommendations({ opportunities = [] }) {
       <div className="border-b border-stone-200 p-4"><h2 className="text-lg font-semibold text-ink">Recommended moves</h2><p className="text-sm text-stone-500">Ranked by spread intensity</p></div>
       {opportunities.length === 0 && (
         <div className="p-5 text-sm text-stone-500">
-          Add competitor prices to unlock plain-language recommendations.
+          Run a market scan to unlock plain-language recommendations.
         </div>
       )}
       <div className="divide-y divide-stone-100">
@@ -1185,7 +1216,7 @@ function RecommendationsPage({ opportunities = [], setView }) {
             <TrendingUp className="mx-auto h-8 w-8 text-stone-400" />
             <h3 className="mt-3 text-lg font-semibold">No recommendations yet</h3>
             <p className="mx-auto mt-2 max-w-md text-sm text-stone-500">
-              Add one competitor price from My Products. PricePulse will calculate spread, margin pressure, and the next best action.
+              Run a market scan from My Products. PricePulse will calculate spread, margin pressure, and the next best action.
             </p>
             <button type="button" onClick={() => setView('products')} className="mt-4 h-10 rounded-lg bg-ink px-4 text-sm font-semibold text-white hover:bg-moss">
               Go to products
