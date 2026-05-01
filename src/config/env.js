@@ -13,8 +13,17 @@ const toList = (value, fallback) => {
   return value.split(',').map((item) => item.trim()).filter(Boolean);
 };
 
+const nodeEnv = process.env.NODE_ENV || 'development';
+const isProduction = nodeEnv === 'production';
+const toBoolean = (value, fallback) => {
+  if (value === undefined || value === '') {
+    return fallback;
+  }
+  return value === 'true';
+};
+
 module.exports = {
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
   port: toNumber(process.env.PORT, 3000),
   corsOrigins: toList(process.env.CORS_ORIGIN, [
     'http://localhost:5173',
@@ -41,5 +50,9 @@ module.exports = {
   rateLimit: {
     windowMs: toNumber(process.env.RATE_LIMIT_WINDOW_MS, 15 * 60 * 1000),
     max: toNumber(process.env.RATE_LIMIT_MAX_REQUESTS, 1000)
+  },
+  features: {
+    enableDemoAccounts: toBoolean(process.env.ENABLE_DEMO_ACCOUNTS, !isProduction),
+    allowDemoData: toBoolean(process.env.ALLOW_DEMO_DATA, !isProduction)
   }
 };

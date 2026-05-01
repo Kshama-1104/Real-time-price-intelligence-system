@@ -13,8 +13,10 @@ const getClient = () => {
 
   const options = {
     lazyConnect: true,
+    connectTimeout: 1000,
     maxRetriesPerRequest: 1,
-    enableOfflineQueue: false
+    enableOfflineQueue: false,
+    retryStrategy: null
   };
 
   client = env.redis.url
@@ -126,7 +128,7 @@ const status = () => ({
 
 const close = async () => {
   if (client) {
-    await client.quit();
+    client.disconnect();
     client = null;
   }
 };

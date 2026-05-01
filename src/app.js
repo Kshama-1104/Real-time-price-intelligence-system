@@ -17,6 +17,7 @@ const eventRoutes = require('./api/routes/event.routes');
 const consumerRoutes = require('./api/routes/consumer.routes');
 const metricsRoutes = require('./api/routes/metrics.routes');
 const productRoutes = require('./api/routes/product.routes');
+const authRoutes = require('./api/routes/auth.routes');
 
 // Import middlewares
 const errorMiddleware = require('./api/middlewares/error.middleware');
@@ -127,6 +128,7 @@ app.get('/metrics', (req, res) => {
 });
 
 // API routes
+app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/price-intelligence', productRoutes);
 app.use('/api/v1/topics', topicRoutes);
 app.use('/api/v1/topics/:topicName/events', eventRoutes);

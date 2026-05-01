@@ -1,14 +1,41 @@
 const { randomUUID } = require('crypto');
+const env = require('../../config/env');
 const db = require('../../database/pool');
 const cache = require('../../cache/redis');
 const logger = require('../../core/logger');
 const seedData = require('../../data/seed-data');
 
+const DEMO_ORG_ID = 'org-pricepulse-demo';
+
 const clone = (value) => JSON.parse(JSON.stringify(value));
-const memoryProducts = clone(seedData.products);
-const memoryAlerts = clone(seedData.alerts);
+const withDemoOrg = (item) => ({ ...item, organizationId: item.organizationId || DEMO_ORG_ID });
+const memoryProducts = clone(seedData.products).map(withDemoOrg);
+const memoryAlerts = clone(seedData.alerts).map(withDemoOrg);
 
 const toNumber = (value) => Number.parseFloat(value || 0);
+
+const getWorkspace = (user) => ({
+  organizationId: user?.organizationId || DEMO_ORG_ID
+});
+
+const isFilterPayload = (value) => value
+  && typeof value === 'object'
+  && !value.organizationId
+  && !value.role
+  && ['search', 'category', 'status', 'page', 'limit'].some((key) => Object.prototype.hasOwnProperty.call(value, key));
+
+const splitListArgs = (userOrFilters, maybeFilters) => {
+  if (isFilterPayload(userOrFilters) && maybeFilters === undefined) {
+    return { user: null, filters: userOrFilters };
+  }
+  return { user: userOrFilters || null, filters: maybeFilters || {} };
+};
+
+const serviceUnavailable = () => {
+  const error = new Error('Your workspace data is temporarily unavailable. Please try again in a moment.');
+  error.statusCode = 503;
+  return error;
+};
 
 const getLowestCompetitor = (product) => {
   if (!product.competitors || product.competitors.length === 0) {
@@ -71,6 +98,7 @@ const mapProductRow = (row, observations = []) => {
 
   return {
     id: row.id,
+    organizationId: row.organization_id,
     sku: row.sku,
     name: row.name,
     category: row.category,
@@ -98,21 +126,38 @@ const mapProductRow = (row, observations = []) => {
 };
 
 class ProductService {
-  async loadProducts() {
+  async ensureDataStore() {
     const online = await db.ping();
+    if (online) {
+      return true;
+    }
+
+    if (env.nodeEnv === 'production' || !env.features.allowDemoData) {
+      throw serviceUnavailable();
+    }
+
+    return false;
+  }
+
+  async loadProducts(user) {
+    const { organizationId } = getWorkspace(user);
+    const online = await this.ensureDataStore();
     if (!online) {
-      return memoryProducts.map(enrichProduct);
+      return memoryProducts
+        .filter((product) => product.organizationId === organizationId)
+        .map(enrichProduct);
     }
 
     try {
       const productResult = await db.query(`
-        SELECT id, sku, name, category, brand, channel, our_price, cost, target_margin, stock, status, updated_at
+        SELECT id, organization_id, sku, name, category, brand, channel, our_price, cost, target_margin, stock, status, updated_at
         FROM products
+        WHERE organization_id = $1
         ORDER BY updated_at DESC
-      `);
+      `, [organizationId]);
 
       if (productResult.rows.length === 0) {
-        return memoryProducts.map(enrichProduct);
+        return [];
       }
 
       const productIds = productResult.rows.map((product) => product.id);
@@ -133,41 +178,44 @@ class ProductService {
         .map((row) => mapProductRow(row, observationsByProduct[row.id] || []))
         .map(enrichProduct);
     } catch (error) {
-      logger.warn(`Falling back to in-memory products: ${error.message}`);
-      return memoryProducts.map(enrichProduct);
+      logger.error(`Unable to load workspace products: ${error.message}`);
+      throw serviceUnavailable();
     }
   }
 
-  async loadAlerts() {
-    const online = await db.ping();
+  async loadAlerts(user) {
+    const { organizationId } = getWorkspace(user);
+    const online = await this.ensureDataStore();
     if (!online) {
-      return clone(memoryAlerts);
+      return clone(memoryAlerts).filter((alert) => alert.organizationId === organizationId);
     }
 
     try {
       const result = await db.query(`
-        SELECT id, severity, product_id AS "productId", title, message, status, created_at AS "createdAt"
+        SELECT id, severity, product_id AS "productId", organization_id AS "organizationId", title, message, status, created_at AS "createdAt"
         FROM alert_rules
+        WHERE organization_id = $1
         ORDER BY created_at DESC
         LIMIT 25
-      `);
+      `, [organizationId]);
 
-      return result.rows.length > 0 ? result.rows : clone(memoryAlerts);
+      return result.rows;
     } catch (error) {
-      logger.warn(`Falling back to in-memory alerts: ${error.message}`);
-      return clone(memoryAlerts);
+      logger.error(`Unable to load workspace alerts: ${error.message}`);
+      throw serviceUnavailable();
     }
   }
 
-  async getDashboard() {
-    const cacheKey = 'price-intelligence:dashboard';
+  async getDashboard(user) {
+    const { organizationId } = getWorkspace(user);
+    const cacheKey = `price-intelligence:dashboard:${organizationId}`;
     const cached = await cache.getJson(cacheKey);
     if (cached) {
       return cached;
     }
 
-    const products = await this.loadProducts();
-    const alerts = await this.loadAlerts();
+    const products = await this.loadProducts(user);
+    const alerts = await this.loadAlerts(user);
     const dashboard = this.buildDashboard(products, alerts);
     await cache.setJson(cacheKey, dashboard);
     return dashboard;
@@ -255,8 +303,9 @@ class ProductService {
     };
   }
 
-  async list(filters) {
-    const products = await this.loadProducts();
+  async list(userOrFilters, maybeFilters) {
+    const { user, filters } = splitListArgs(userOrFilters, maybeFilters);
+    const products = await this.loadProducts(user);
     const filtered = filterProducts(products, filters);
     const page = filters.page || 1;
     const limit = filters.limit || 50;
@@ -272,38 +321,51 @@ class ProductService {
     };
   }
 
-  async getById(id) {
-    const products = await this.loadProducts();
+  async getById(userOrId, maybeId) {
+    const user = maybeId === undefined ? null : userOrId;
+    const id = maybeId === undefined ? userOrId : maybeId;
+    const products = await this.loadProducts(user);
     return products.find((product) => product.id === id || product.sku === id) || null;
   }
 
-  async create(payload) {
+  async create(user, payload) {
+    const { organizationId } = getWorkspace(user);
     const product = {
       id: `prd-${randomUUID()}`,
+      organizationId,
       ...payload,
       competitors: [],
       priceHistory: [],
       updatedAt: new Date().toISOString()
     };
 
-    const online = await db.ping();
+    const online = await this.ensureDataStore();
     if (online) {
-      await db.query(`
-        INSERT INTO products (id, sku, name, category, brand, channel, our_price, cost, target_margin, stock, status)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      `, [
-        product.id,
-        product.sku,
-        product.name,
-        product.category,
-        product.brand,
-        product.channel,
-        product.ourPrice,
-        product.cost,
-        product.targetMargin,
-        product.stock,
-        product.status
-      ]);
+      try {
+        await db.query(`
+          INSERT INTO products (id, organization_id, sku, name, category, brand, channel, our_price, cost, target_margin, stock, status)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        `, [
+          product.id,
+          product.organizationId,
+          product.sku,
+          product.name,
+          product.category,
+          product.brand,
+          product.channel,
+          product.ourPrice,
+          product.cost,
+          product.targetMargin,
+          product.stock,
+          product.status
+        ]);
+      } catch (error) {
+        if (error.code === '23505') {
+          error.message = 'A product with this SKU already exists in your workspace';
+          error.statusCode = 409;
+        }
+        throw error;
+      }
     } else {
       memoryProducts.unshift(product);
     }
@@ -312,14 +374,99 @@ class ProductService {
     return enrichProduct(product);
   }
 
-  async recordPriceObservation(productId, payload) {
-    const online = await db.ping();
+  async update(user, productId, payload) {
+    const { organizationId } = getWorkspace(user);
+    const online = await this.ensureDataStore();
+    const current = await this.getById(user, productId);
+    if (!current) {
+      const error = new Error('Product not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (online) {
+      const updated = { ...current, ...payload, updatedAt: new Date().toISOString() };
+      await db.query(`
+        UPDATE products
+        SET sku = $3,
+            name = $4,
+            category = $5,
+            brand = $6,
+            channel = $7,
+            our_price = $8,
+            cost = $9,
+            target_margin = $10,
+            stock = $11,
+            status = $12,
+            updated_at = NOW()
+        WHERE id = $1 AND organization_id = $2
+      `, [
+        current.id,
+        organizationId,
+        updated.sku,
+        updated.name,
+        updated.category,
+        updated.brand,
+        updated.channel,
+        updated.ourPrice,
+        updated.cost,
+        updated.targetMargin,
+        updated.stock,
+        updated.status
+      ]);
+      await cache.deleteByPattern('price-intelligence:*');
+      return this.getById(user, current.id);
+    }
+
+    const index = memoryProducts.findIndex((item) => item.organizationId === organizationId && (item.id === productId || item.sku === productId));
+    memoryProducts[index] = {
+      ...memoryProducts[index],
+      ...payload,
+      updatedAt: new Date().toISOString()
+    };
+
+    await cache.deleteByPattern('price-intelligence:*');
+    return enrichProduct(memoryProducts[index]);
+  }
+
+  async delete(user, productId) {
+    const { organizationId } = getWorkspace(user);
+    const online = await this.ensureDataStore();
+    const current = await this.getById(user, productId);
+    if (!current) {
+      const error = new Error('Product not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (online) {
+      await db.query('DELETE FROM products WHERE id = $1 AND organization_id = $2', [current.id, organizationId]);
+      await cache.deleteByPattern('price-intelligence:*');
+      return true;
+    }
+
+    const index = memoryProducts.findIndex((item) => item.organizationId === organizationId && (item.id === productId || item.sku === productId));
+    memoryProducts.splice(index, 1);
+    await cache.deleteByPattern('price-intelligence:*');
+    return true;
+  }
+
+  async recordPriceObservation(user, productId, payload) {
+    const { organizationId } = getWorkspace(user);
+    const online = await this.ensureDataStore();
+    const product = await this.getById(user, productId);
+    if (!product) {
+      const error = new Error('Product not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
     if (online) {
       await db.query(`
         INSERT INTO price_observations (product_id, retailer, price, availability, rating, observed_at)
         VALUES ($1, $2, $3, $4, $5, $6)
       `, [
-        productId,
+        product.id,
         payload.retailer,
         payload.price,
         payload.availability,
@@ -327,42 +474,158 @@ class ProductService {
         payload.observedAt
       ]);
     } else {
-      const product = memoryProducts.find((item) => item.id === productId || item.sku === productId);
-      if (!product) {
-        const error = new Error('Product not found');
-        error.statusCode = 404;
-        throw error;
-      }
+      const memoryProduct = memoryProducts.find((item) => item.organizationId === organizationId && item.id === product.id);
       const observedAt = payload.observedAt instanceof Date ? payload.observedAt.toISOString() : payload.observedAt;
-      product.competitors = product.competitors.filter((item) => item.retailer !== payload.retailer);
-      product.competitors.push({
+      memoryProduct.competitors = memoryProduct.competitors.filter((item) => item.retailer !== payload.retailer);
+      memoryProduct.competitors.push({
         retailer: payload.retailer,
         price: payload.price,
         availability: payload.availability,
         rating: payload.rating,
         updatedAt: observedAt
       });
-      product.priceHistory.push({
+      memoryProduct.priceHistory.push({
         time: observedAt,
-        ourPrice: product.ourPrice,
+        ourPrice: memoryProduct.ourPrice,
         marketPrice: payload.price
       });
-      product.updatedAt = new Date().toISOString();
+      memoryProduct.updatedAt = new Date().toISOString();
     }
 
     await cache.deleteByPattern('price-intelligence:*');
-    return this.getById(productId);
+    const updatedProduct = await this.getById(user, product.id);
+    await this.syncAlertForProduct(user, updatedProduct);
+    await cache.deleteByPattern('price-intelligence:*');
+    return this.getById(user, product.id);
   }
 
-  async listAlerts() {
-    return this.loadAlerts();
+  async syncAlertForProduct(user, product) {
+    if (!product?.lowestCompetitor) {
+      return null;
+    }
+
+    const { organizationId } = getWorkspace(user);
+    const undercutRisk = product.spreadPercent > 6;
+    const pricingUpside = product.spreadPercent < -8;
+    if (!undercutRisk && !pricingUpside) {
+      return null;
+    }
+
+    const alert = {
+      id: `alt-${product.id}`,
+      organizationId,
+      severity: Math.abs(product.spreadPercent) > 10 ? 'high' : 'medium',
+      productId: product.id,
+      title: undercutRisk ? 'Competitor undercut needs review' : 'Margin upside available',
+      message: undercutRisk
+        ? `${product.lowestCompetitor.retailer} is ${Math.abs(product.spreadPercent).toFixed(1)}% below your current price for ${product.sku}.`
+        : `The market is ${Math.abs(product.spreadPercent).toFixed(1)}% above your current price for ${product.sku}.`,
+      status: 'open',
+      createdAt: new Date().toISOString()
+    };
+
+    const online = await this.ensureDataStore();
+    if (online) {
+      await db.query(`
+        INSERT INTO alert_rules (id, severity, product_id, organization_id, title, message, status, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, 'open', NOW())
+        ON CONFLICT (id) DO UPDATE
+        SET severity = EXCLUDED.severity,
+            title = EXCLUDED.title,
+            message = EXCLUDED.message,
+            status = CASE WHEN alert_rules.status = 'closed' THEN 'open' ELSE alert_rules.status END,
+            created_at = NOW()
+      `, [
+        alert.id,
+        alert.severity,
+        alert.productId,
+        alert.organizationId,
+        alert.title,
+        alert.message
+      ]);
+      return alert;
+    }
+
+    const existingIndex = memoryAlerts.findIndex((item) => item.id === alert.id && item.organizationId === organizationId);
+    if (existingIndex >= 0) {
+      memoryAlerts[existingIndex] = {
+        ...memoryAlerts[existingIndex],
+        ...alert,
+        status: memoryAlerts[existingIndex].status === 'closed' ? 'open' : memoryAlerts[existingIndex].status
+      };
+    } else {
+      memoryAlerts.unshift(alert);
+    }
+
+    return alert;
+  }
+
+  async listAlerts(user) {
+    return this.loadAlerts(user);
+  }
+
+  async updateAlert(user, alertId, payload) {
+    const { organizationId } = getWorkspace(user);
+    const online = await this.ensureDataStore();
+    if (online) {
+      const result = await db.query(
+        'UPDATE alert_rules SET status = $3 WHERE id = $1 AND organization_id = $2 RETURNING id',
+        [alertId, organizationId, payload.status]
+      );
+      if (result.rowCount === 0) {
+        const error = new Error('Alert not found');
+        error.statusCode = 404;
+        throw error;
+      }
+    } else {
+      const alert = memoryAlerts.find((item) => item.organizationId === organizationId && item.id === alertId);
+      if (!alert) {
+        const error = new Error('Alert not found');
+        error.statusCode = 404;
+        throw error;
+      }
+      alert.status = payload.status;
+    }
+
+    await cache.deleteByPattern('price-intelligence:*');
+    return this.loadAlerts(user);
+  }
+
+  async report(user) {
+    const dashboard = await this.getDashboard(user);
+    const products = await this.loadProducts(user);
+    const alerts = await this.loadAlerts(user);
+
+    const atRisk = products.filter((product) => ['watch', 'action'].includes(product.status));
+    const upside = products.filter((product) => product.status === 'opportunity');
+
+    return {
+      generatedAt: new Date().toISOString(),
+      executiveSummary: {
+        headline: products.length === 0
+          ? 'Add your first product to generate pricing recommendations.'
+          : `${atRisk.length} products need pricing attention and ${upside.length} have margin upside.`,
+        trackedProducts: products.length,
+        activeAlerts: dashboard.stats.activeAlerts,
+        averageMargin: dashboard.stats.averageMargin
+      },
+      recommendations: dashboard.opportunities,
+      riskRegister: atRisk.map((product) => ({
+        sku: product.sku,
+        name: product.name,
+        status: product.status,
+        spreadPercent: product.spreadPercent,
+        lowestCompetitor: product.lowestCompetitor
+      })),
+      alertSummary: alerts
+    };
   }
 
   async systemStatus() {
     const [database, redis] = await Promise.all([db.ping(), cache.ping()]);
     return {
       api: 'ok',
-      database: database ? 'connected' : 'fallback',
+      database: database ? 'connected' : 'unavailable',
       cache: redis ? 'connected' : 'disabled',
       databaseDetails: db.status(),
       cacheDetails: cache.status(),

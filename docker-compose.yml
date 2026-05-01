@@ -53,6 +53,11 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-replace-this-before-public-deploy}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ENABLE_DEMO_ACCOUNTS: ${ENABLE_DEMO_ACCOUNTS:-false}
+      ALLOW_DEMO_DATA: ${ALLOW_DEMO_DATA:-false}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     volumes:
       - api_logs:/app/logs
