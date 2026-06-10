@@ -1,191 +1,180 @@
-# Event Stream
+# Real-Time Price Intelligence System
 
-<div align="center">
+Full-stack web application for tracking products, comparing competitor prices, generating pricing recommendations, and exporting executive reports.
 
-![Event Stream Banner](./docs/images/banner.png)
+## Live Website
 
+Deployment URL: Add your hosted website link here after deployment.
 
-High-throughput, low-latency event streaming and processing platform for capturing, transmitting, processing, and analyzing continuous streams of events in real time.
+Example:
 
-
-</div>
-
----
-
-## 📊 Architecture Overview
-
-![Architecture Diagram](./docs/images/architecture.png)
-
-## 🚀 Features
-
-### 1. Event Ingestion
-- High-speed event producers
-- Support for structured and semi-structured events
-- Batch and real-time ingestion modes
-- Schema-based event validation
-
-### 2. Stream Processing Engine
-- Real-time event processing pipelines
-- Window-based processing (time, count, session)
-- Event filtering, aggregation, and transformation
-- Stateful and stateless stream processing
-
-### 3. Topic & Partition Management
-- Topic-based event categorization
-- Partitioning for parallel processing
-- Event ordering guarantees within partitions
-- Retention and compaction policies
-
-### 4. Event Consumers & Subscriptions
-- Multiple consumer groups
-- Independent offset management
-- Replay and rewind capability
-- Backpressure handling
-
-### 5. Delivery Guarantees
-- At-most-once, at-least-once, and exactly-once semantics
-- Offset commit strategies
-- Idempotent event handling
-- Duplicate detection
-
-### 6. Event Schema & Versioning
-- Schema registry for events
-- Backward and forward compatibility
-- Schema evolution handling
-- Data contract enforcement
-
-### 7. Fault Tolerance & Recovery
-- Event replication across nodes
-- Automatic failover
-- Checkpointing and state recovery
-- Dead-event handling
-
-### 8. Real-Time Analytics
-- Stream-level metrics and KPIs
-- Event rate, latency, and throughput analysis
-- Live dashboards and alerts
-- Trend and anomaly detection
-
-### 9. Security & Access Control
-- Producer and consumer authentication
-- Topic-level authorization
-- Encrypted event transmission
-- Multi-tenant isolation
-
-### 10. Event Routing & Fan-Out
-- Event broadcasting to multiple consumers
-- Conditional event routing
-- Stream branching and merging
-- Event enrichment pipelines
-
-### 11. Integration & API Layer
-- Producer and consumer SDKs
-- REST APIs for stream management
-- Webhooks for downstream systems
-- Integration with microservices and data lakes
-
-### 12. Scalability & Performance
-- Horizontal scaling of brokers
-- Elastic stream processing
-- High availability configuration
-- Cloud-native deployment readiness
-
-## 🔄 Event Flow
-
-![Event Flow Diagram](./docs/images/event-flow.png)
-
-## 📁 Project Structure
-
-```
-event-stream/
-├── README.md
-├── .env
-├── .gitignore
-├── package.json
-├── docker-compose.yml
-├── docs/
-│   └── images/
-│       ├── banner.png
-│       ├── architecture.png
-│       ├── event-flow.png
-│       └── tech-stack.png
-├── config/
-├── src/
-├── frontend/
-└── scripts/
+```text
+https://your-price-intelligence-app.onrender.com
 ```
 
-## 🛠️ Technology Stack
+## What This Project Includes
 
-<div align="center">
+- Frontend: React, Vite, Tailwind CSS, Recharts, Socket.io client
+- Backend: Node.js, Express, REST APIs, JWT authentication, Socket.io
+- Database: PostgreSQL migrations for users, products, observations, alerts, and workspace isolation
+- Cache and realtime support: Redis
+- Deployment: Dockerfile, Docker Compose, Nginx config, Prometheus config, GitHub Actions workflow
 
-![Technology Stack](./docs/images/tech-stack.png)
+## Main Features
 
-</div>
+- User signup and login
+- Role-based access for admin, analyst, and client users
+- Product tracking by SKU, category, brand, price, margin, stock, and status
+- Competitor price observations
+- Automatic market scan simulation
+- Pricing recommendations such as Protect rank, Lift margin, and Hold band
+- Alert queue for competitor undercuts and margin opportunities
+- Executive report view with CSV/JSON export support
+- System health view for API, PostgreSQL, and Redis status
 
-- **Backend**: Node.js, Express.js
-- **Database**: PostgreSQL
-- **Cache**: Redis
-- **Message Broker**: Custom broker with Redis backend
-- **Authentication**: JWT
-- **Real-time**: WebSocket (Socket.io)
-- **Testing**: Jest, Supertest
+## Project Structure
 
-## 🚦 Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- PostgreSQL 14+
-- Redis 6+
-- Docker (optional)
-
-### Installation
-
-1. Clone the repository
-```bash
-git clone <repository-url>
-cd event-stream
+```text
+Real-time-price-intelligence-system/
+|-- client/                 React frontend
+|-- src/                    Express backend
+|   |-- api/                Routes, controllers, services, validators, middleware
+|   |-- cache/              Redis client
+|   |-- config/             Runtime environment config
+|   |-- database/           PostgreSQL pool and migrations
+|   |-- data/               Demo seed data
+|-- deploy/                 Nginx and Prometheus config
+|-- docs/                   Architecture and deployment docs
+|-- Dockerfile              Production API + built frontend image
+|-- docker-compose.yml      Local/VM full-stack deployment
+|-- .env.example            Environment variable template
 ```
 
-2. Install dependencies
-```bash
-npm install
-```
+## Run Locally
 
-3. Set up environment variables
+Prerequisites:
+
+- Node.js 18 or newer
+- PostgreSQL 14 or newer
+- Redis 6 or newer
+- Docker Desktop, optional but recommended
+
+### Option 1: Docker Compose
+
 ```bash
 cp .env.example .env
-# Edit .env with your configuration
+docker compose up -d --build
 ```
 
-4. Set up database
+Open:
+
+```text
+http://localhost
+```
+
+### Option 2: Manual Development
+
+Start PostgreSQL and Redis, then:
+
 ```bash
+cp .env.example .env
+npm install
+npm --prefix client install
 npm run db:migrate
-npm run db:seed
-```
-
-5. Start services
-```bash
-# Using Docker Compose
-docker-compose up -d
-
-# Or manually
 npm run dev
 ```
 
+In another terminal:
 
----
+```bash
+npm run client:dev
+```
 
-## 👤 Creator
+Open:
 
-- 💼 **Created by**: Kshama Mishra
+```text
+http://localhost:5173
+```
 
----
+## Important Environment Variables
 
-<div align="center">
+```text
+NODE_ENV=production
+PORT=3000
+CORS_ORIGIN=https://your-live-site-url
+DATABASE_URL=postgresql://user:password@host:5432/database
+REDIS_URL=redis://host:6379
+JWT_SECRET=replace-with-a-long-random-secret
+COOKIE_SECURE=true
+ENABLE_DEMO_ACCOUNTS=false
+ALLOW_DEMO_DATA=false
+```
 
+For local demo mode, you can set:
 
-Created by Kshama Mishra
+```text
+ENABLE_DEMO_ACCOUNTS=true
+ALLOW_DEMO_DATA=true
+```
 
-</div>
+Demo accounts:
+
+```text
+admin@pricepulse.com / admin123
+analyst@pricepulse.com / analyst123
+client@pricepulse.com / client123
+```
+
+## Database Setup
+
+Run migrations:
+
+```bash
+npm run db:migrate
+```
+
+The migrations create:
+
+- `app_users`
+- `products`
+- `price_observations`
+- `alert_rules`
+- workspace isolation columns and indexes
+
+## Deployment
+
+The simplest production path is Docker:
+
+1. Push this repository to GitHub.
+2. Create managed PostgreSQL and Redis services.
+3. Build and deploy the Docker image from this repository.
+4. Set the production environment variables.
+5. Run database migrations once.
+6. Add the deployed URL to the Live Website section above.
+
+Recommended platforms:
+
+- Render: Web Service with Docker, plus managed PostgreSQL and Redis
+- Railway: Docker app, PostgreSQL plugin, Redis plugin
+- AWS: EC2 or ECS, RDS PostgreSQL, ElastiCache Redis, Nginx reverse proxy
+
+GitHub Actions already validates backend tests, frontend build, and Docker build. It can also deploy to EC2 when these repository secrets are configured:
+
+```text
+EC2_HOST
+EC2_USER
+EC2_SSH_KEY
+EC2_APP_PATH
+```
+
+## Verification Commands
+
+```bash
+npm test
+npm run client:build
+docker build -t price-intelligence .
+```
+
+## Creator
+
+Created by Kshama Mishra.
