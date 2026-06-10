@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: price-intelligence-web
+    runtime: docker
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: ENABLE_DEMO_ACCOUNTS
+        value: "false"
+      - key: ALLOW_DEMO_DATA
+        value: "false"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: price-intelligence-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: price-intelligence-redis
+          property: connectionString
+
+  - type: redis
+    name: price-intelligence-redis
+    ipAllowList: []
+
+databases:
+  - name: price-intelligence-db
