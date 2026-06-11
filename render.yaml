@@ -2,6 +2,7 @@ services:
   - type: web
     name: price-intelligence-web
     runtime: docker
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
