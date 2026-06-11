@@ -120,7 +120,7 @@ class AuthService {
       return true;
     }
 
-    if (env.nodeEnv === 'production') {
+    if (!env.features.enableDemoAccounts) {
       const error = new Error('Account service is not available. Please try again in a moment.');
       error.statusCode = 503;
       throw error;

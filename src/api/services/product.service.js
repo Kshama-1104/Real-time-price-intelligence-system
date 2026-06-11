@@ -163,7 +163,7 @@ class ProductService {
       return true;
     }
 
-    if (env.nodeEnv === 'production' || !env.features.allowDemoData) {
+    if (!env.features.allowDemoData) {
       throw serviceUnavailable();
     }
 
